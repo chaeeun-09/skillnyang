@@ -14,8 +14,31 @@ GitHub 스타 + **skills.sh 실제 설치 수** + 공식·큐레이션 출처 + 
 /skills server                  💗 우리 서버 인기 (👍·설치 조회)
 /skills rising                  📈 최근 7일 스타·설치 급상승
 /skills digest set|off|now      📮 (관리자) 주간 다이제스트 채널 설정 / 미리보기
+/skills auto set|off|watch|now|status   🤖 (관리자) 자동 추천 설정 — 아래 "자동 추천" 참고
+@스킬냥이 테라폼 스킬 뭐 있어?     🐱 멘션하면 바로 추천 (별도 권한 설정 불필요)
 /skills refresh                 🔄 (관리자) 인덱스 즉시 갱신
 ```
+
+## 자동 추천 🤖
+
+명령어를 안 쳐도 봇이 먼저 알려주는 세 가지. 서버 관리자가 `/skills auto ...` 로 켠다.
+
+| 기능 | 설정 | 동작 |
+|---|---|---|
+| 🌅 **오늘의 스킬** | `/skills auto set channel:#채널 [hour] [alerts]` | 매일 정해진 시각(기본 10시, 서울)에 스킬 2개를 올린다. 카테고리를 돌려가며 하나, 나머지는 서버 점수 상위에서. 이미 소개한 레포·1년 넘게 푸시 없는 레포는 제외 |
+| 🔥 **급상승 즉시 알림** | 위 `set` 과 같은 채널 (`alerts:false` 로 끔) | 크롤링 직후 어제 스냅샷과 비교해 스타 +200 / (+100 이면서 15%↑) / 설치 +1000 을 넘으면 즉시 알림. 같은 레포는 7일에 한 번, 한 번에 최대 3개 |
+| 👀 **대화 감지 추천** | `/skills auto watch channel:#채널 enabled:true` | 그 채널에서 *Claude/스킬 맥락 + 질문 + 알려진 주제어(테라폼·pdf·도커…)* 가 모두 있는 메시지에만 관련 스킬을 제안. 채널당 20분, 사람당 60분에 한 번만 |
+
+`/skills auto now` 로 오늘의 스킬을 미리보고, `/skills auto status` 로 설정을 확인한다.
+
+### 대화 감지를 켜려면 (선택)
+1. [개발자 포털](https://discord.com/developers/applications) → 앱 → **Bot** → **Privileged Gateway Intents** → **Message Content Intent** 켜기
+2. 서버 `.env` 에 `ENABLE_MESSAGE_CONTENT=true` 추가 후 `docker compose up -d`
+3. 디스코드에서 `/skills auto watch ...` 로 채널을 지정
+
+**프라이버시:** 기본값은 꺼짐이고, 관리자가 지정한 채널의 메시지만 읽는다. 메시지는 저장·전송하지 않고 메모리에서 키워드만 확인한 뒤 버린다.
+관찰 채널을 켰다면 서버 멤버에게 알려 주자. 꺼 두면 봇은 자기를 멘션한 메시지만 본다.
+봇이 답장을 못 하면 그 채널에서 봇에게 **채널 보기 / 메시지 보내기 / 링크 임베드 / 메시지 기록 보기** 권한이 있는지 확인한다.
 
 ## 구조
 

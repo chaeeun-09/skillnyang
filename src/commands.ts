@@ -57,6 +57,43 @@ export const skillsCommand = new SlashCommandBuilder()
       .addSubcommand((s) => s.setName("off").setDescription("다이제스트 끄기"))
       .addSubcommand((s) => s.setName("now").setDescription("지금 바로 미리보기 (나에게만 보임)")),
   )
+  .addSubcommandGroup((g) =>
+    g
+      .setName("auto")
+      .setDescription("(관리자) 자동 추천 설정")
+      .addSubcommand((s) =>
+        s
+          .setName("set")
+          .setDescription("매일 '오늘의 스킬'과 급상승 알림을 보낼 채널 지정")
+          .addChannelOption((o) =>
+            o
+              .setName("channel")
+              .setDescription("텍스트 채널")
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          )
+          .addIntegerOption((o) =>
+            o.setName("hour").setDescription("보낼 시각 (서울, 0~23)").setMinValue(0).setMaxValue(23),
+          )
+          .addBooleanOption((o) => o.setName("alerts").setDescription("급상승 즉시 알림도 켜기 (기본: 켜짐)")),
+      )
+      .addSubcommand((s) => s.setName("off").setDescription("오늘의 스킬·급상승 알림 끄기"))
+      .addSubcommand((s) =>
+        s
+          .setName("watch")
+          .setDescription("채널 대화를 보고 관련 스킬 제안 켜기/끄기 (채널별)")
+          .addChannelOption((o) =>
+            o
+              .setName("channel")
+              .setDescription("텍스트 채널")
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          )
+          .addBooleanOption((o) => o.setName("enabled").setDescription("켜기(true) / 끄기(false)").setRequired(true)),
+      )
+      .addSubcommand((s) => s.setName("now").setDescription("'오늘의 스킬' 미리보기 (나에게만 보임)"))
+      .addSubcommand((s) => s.setName("status").setDescription("자동 추천 설정 보기")),
+  )
   .addSubcommand((s) => s.setName("refresh").setDescription("(관리자) 인덱스 즉시 갱신"))
   .setDMPermission(true);
 

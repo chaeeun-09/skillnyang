@@ -74,10 +74,10 @@ export function categorize(text: string, topics: string[]): string[] {
 }
 
 /** 간단한 키워드 검색: 이름/아이템명 일치에 높은 가중치, 마지막에 랭킹 점수로 타이브레이크 */
-export function search(entries: Entry[], query: string, limit = 10): Entry[] {
+export function searchScored(entries: Entry[], query: string, limit = 10): { e: Entry; m: number }[] {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return entries.slice(0, limit);
-  const scored = entries
+  if (!terms.length) return entries.slice(0, limit).map((e) => ({ e, m: 0 }));
+  return entries
     .map((e) => {
       const name = e.repo.toLowerCase();
       const items = e.items.map((i) => i.name.toLowerCase()).join(" ");
@@ -95,6 +95,10 @@ export function search(entries: Entry[], query: string, limit = 10): Entry[] {
       return { e, m };
     })
     .filter((x) => x.m > 0)
-    .sort((a, b) => b.m - a.m || b.e.score - a.e.score);
-  return scored.slice(0, limit).map((x) => x.e);
+    .sort((a, b) => b.m - a.m || b.e.score - a.e.score)
+    .slice(0, limit);
+}
+
+export function search(entries: Entry[], query: string, limit = 10): Entry[] {
+  return searchScored(entries, query, limit).map((x) => x.e);
 }

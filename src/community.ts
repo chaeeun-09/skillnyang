@@ -15,6 +15,22 @@ export interface GuildData {
   clicks: Record<string, number[]>;
   digestChannelId?: string;
   lastDigestAt?: string;
+  /** '오늘의 스킬' + 급상승 알림 채널 */
+  autoChannelId?: string;
+  /** 발송 시각(서울, 0~23). 없으면 config.dailyHour */
+  dailyHour?: number;
+  /** 급상승 즉시 알림 (undefined = 켜짐) */
+  alertsOn?: boolean;
+  /** 마지막 '오늘의 스킬' 발송 날짜 (서울 기준 YYYY-MM-DD) */
+  lastDailyDate?: string;
+  /** 이미 소개한 레포(lowercase), 최근 것만 */
+  shown?: string[];
+  /** 다음에 우선할 카테고리 순번 */
+  categoryCursor?: number;
+  /** repo(lowercase) → 급상승 알림을 보낸 시각(ms) */
+  alerted?: Record<string, number>;
+  /** 대화 감지 추천을 켠 채널 */
+  watchChannelIds?: string[];
 }
 
 interface CommunityFile {
@@ -108,6 +124,46 @@ export function setDigest(guildId: string, channelId: string | undefined) {
 
 export function markDigestSent(guildId: string, at = new Date()) {
   guild(guildId).lastDigestAt = at.toISOString();
+  scheduleSave();
+}
+
+export function setAuto(guildId: string, o: { channelId?: string; hour?: number; alerts?: boolean }) {
+  const g = guild(guildId);
+  if (o.channelId) {
+    g.autoChannelId = o.channelId;
+    if (o.hour !== undefined) g.dailyHour = o.hour;
+    if (o.alerts !== undefined) g.alertsOn = o.alerts;
+  } else {
+    delete g.autoChannelId;
+  }
+  scheduleSave();
+}
+
+export function setWatch(guildId: string, channelId: string, on: boolean) {
+  const g = guild(guildId);
+  const set = new Set(g.watchChannelIds ?? []);
+  if (on) set.add(channelId);
+  else set.delete(channelId);
+  g.watchChannelIds = [...set];
+  scheduleSave();
+}
+
+export function markDaily(guildId: string, o: { date: string; picks: string[]; cursor: number; reset: boolean }) {
+  const g = guild(guildId);
+  g.lastDailyDate = o.date;
+  g.categoryCursor = o.cursor;
+  g.shown = [...(o.reset ? [] : g.shown ?? []), ...o.picks.map((r) => r.toLowerCase())].slice(-200);
+  scheduleSave();
+}
+
+export function markAlerted(guildId: string, repo: string, now = Date.now()) {
+  const g = guild(guildId);
+  const k = repo.toLowerCase();
+  const alerted: Record<string, number> = {};
+  // 30일 지난 기록은 정리
+  for (const [r, t] of Object.entries(g.alerted ?? {})) if (now - t < 30 * 86_400_000) alerted[r] = t;
+  alerted[k] = now;
+  g.alerted = alerted;
   scheduleSave();
 }
 

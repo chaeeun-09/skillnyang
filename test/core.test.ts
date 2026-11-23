@@ -7,6 +7,8 @@ import { communityBonus, score, search } from "../src/ranking.js";
 import { _reset, rankForGuild, recordClick, signals, toggleVote } from "../src/community.js";
 import { isDigestTime, newcomers, rising } from "../src/digest.js";
 import { sanitizeSummary } from "../src/summary.js";
+import { detectIntent, isDailyTime, pickDaily, recommendFromText, surges, topicTerms } from "../src/auto.js";
+import type { GuildData } from "../src/community.js";
 import type { Entry } from "../src/types.js";
 import { chunkMessage } from "../src/views.js";
 
@@ -196,4 +198,94 @@ test("skills.sh: 같은 레포 결과만 모아 아이템 설치 수 매칭, 장
     globalThis.fetch = realFetch;
     _resetSkillsSh();
   }
+});
+
+const NOW = Date.parse("2026-11-23T03:00:00Z");
+const G = (o: Partial<GuildData> = {}): GuildData => ({ votes: {}, clicks: {}, ...o });
+const E = (repo: string, score: number, categories: string[] = [], extra: Partial<Entry> = {}): Entry => ({
+  ...base,
+  repo,
+  score,
+  categories,
+  ...extra,
+});
+
+test("auto: 오늘의 스킬은 카테고리를 돌려가며, 이미 소개한 건 제외", () => {
+  const ranked = [E("a/a", 90, ["dev"]), E("b/b", 80, ["devops"]), E("c/c", 70, ["dev"]), E("d/d", 60)];
+  // cursor=1 → devops 우선 (b), 나머지는 전체 상위 (a)
+  const first = pickDaily(ranked, G({ categoryCursor: 1 }), 2, NOW);
+  assert.deepEqual(first.picks.map((e) => e.repo), ["b/b", "a/a"]);
+  assert.equal(first.nextCursor, 2);
+  assert.equal(first.reset, false);
+  // a, b 는 이미 소개 → c 와 d
+  const second = pickDaily(ranked, G({ categoryCursor: 2, shown: ["a/a", "b/b"] }), 2, NOW);
+  assert.deepEqual(second.picks.map((e) => e.repo), ["c/c", "d/d"]);
+  // 전부 소개했으면 기록 초기화하고 다시 처음부터
+  const all = pickDaily(ranked, G({ shown: ["a/a", "b/b", "c/c", "d/d"] }), 2, NOW);
+  assert.equal(all.reset, true);
+  assert.equal(all.picks.length, 2);
+  // 1년 넘게 푸시 없는 레포는 제외
+  const stale = [E("old/old", 99, ["dev"], { pushedAt: "2024-01-01T00:00:00Z" }), E("new/new", 10, ["dev"])];
+  assert.deepEqual(pickDaily(stale, G(), 1, NOW).picks.map((e) => e.repo), ["new/new"]);
+});
+
+test("auto: 오늘의 스킬 발송 시각 (서울 기준, 하루 1번)", () => {
+  const g = G({ autoChannelId: "c1", dailyHour: 10 });
+  assert.equal(isDailyTime(g, new Date("2026-11-23T02:00:00Z")), true, "KST 11시");
+  assert.equal(isDailyTime(g, new Date("2026-11-23T00:00:00Z")), false, "KST 9시");
+  assert.equal(isDailyTime({ ...g, lastDailyDate: "2026-11-23" }, new Date("2026-11-23T02:00:00Z")), false, "오늘 이미 보냄");
+  assert.equal(isDailyTime({ ...g, lastDailyDate: "2026-11-23" }, new Date("2026-11-24T02:00:00Z")), true, "다음 날");
+  assert.equal(isDailyTime(G({ dailyHour: 10 }), new Date("2026-11-23T02:00:00Z")), false, "채널 미설정");
+  // UTC 15시 이후는 서울 기준으로 다음 날
+  assert.equal(isDailyTime({ ...g, lastDailyDate: "2026-11-23" }, new Date("2026-11-23T16:00:00Z")), false, "KST 11-24 01시 < 10시");
+});
+
+test("auto: 급상승은 어제 스냅샷 대비 기준을 넘는 것만", () => {
+  const idx = {
+    updatedAt: "",
+    entries: [
+      E("x/x", 1, [], { stars: 1300, installs: 0 }), // +300
+      E("y/y", 1, [], { stars: 1050, installs: 0 }), // +50
+      E("z/z", 1, [], { stars: 1150, installs: 0 }), // +150, 15%
+      E("w/w", 1, [], { stars: 1000, installs: 1500 }), // 설치 +1500
+      E("n/n", 1, [], { stars: 9999, installs: 0 }), // 어제 기록 없음
+    ],
+    history: {
+      "2026-11-22": {
+        "x/x": [1000, 0] as [number, number],
+        "y/y": [1000, 0] as [number, number],
+        "z/z": [1000, 0] as [number, number],
+        "w/w": [1000, 0] as [number, number],
+      },
+    },
+  };
+  assert.deepEqual(surges(idx, NOW).map((s) => s.entry.repo), ["x/x", "w/w", "z/z"]);
+  assert.deepEqual(surges({ ...idx, history: {} }, NOW), [], "기록 없으면 알림 없음");
+  assert.deepEqual(surges({ ...idx, history: { "2026-11-23": idx.history["2026-11-22"] } }, NOW), [], "오늘 기록은 기준이 아님");
+  assert.deepEqual(surges({ ...idx, history: { "2026-11-10": idx.history["2026-11-22"] } }, NOW), [], "너무 오래된 기록");
+});
+
+test("auto: 대화 의도 감지 — 맥락 + 질문 + 주제어가 모두 있을 때만", () => {
+  assert.equal(detectIntent("클로드 코드에서 테라폼 스킬 추천해줘"), "terraform");
+  assert.equal(detectIntent("claude code pdf 다루는 skill 있을까?"), "pdf");
+  assert.equal(detectIntent("도커랑 쿠버네티스 쓰는 스킬 뭐 있어?"), "docker kubernetes");
+  assert.equal(detectIntent("오늘 점심 뭐 먹지?"), null, "맥락 없음");
+  assert.equal(detectIntent("테라폼 apply 했더니 에러났어"), null, "Claude/스킬 맥락 없음");
+  assert.equal(detectIntent("클로드 코드 스킬 추천해줘"), null, "주제어 없음 → 조용히");
+  assert.equal(detectIntent("클로드 코드로 테라폼 짰어"), null, "질문 아님");
+  assert.equal(detectIntent("?"), null);
+  assert.deepEqual(topicTerms("깃허브 액션이랑 테스트"), ["github actions", "test tdd"]);
+});
+
+test("auto: 멘션 질문은 주제어 → 영어 단어 → 전체 상위로 폴백", () => {
+  const tf = E("t/tf", 10, [], { items: [{ kind: "skill", name: "terraform-plan", description: "" }] });
+  const other = E("o/o", 99, [], { items: [{ kind: "skill", name: "helper", description: "" }], description: "misc" });
+  const r1 = recommendFromText([other, tf], "테라폼 스킬 알려줘");
+  assert.equal(r1.matched, true);
+  assert.equal(r1.list[0].repo, "t/tf");
+  const r2 = recommendFromText([other, tf], "terraform 쓰는 거");
+  assert.equal(r2.list[0].repo, "t/tf");
+  const r3 = recommendFromText([other, tf], "ㅋㅋㅋ 뭐 있어");
+  assert.equal(r3.matched, false);
+  assert.equal(r3.list[0].repo, "o/o");
 });

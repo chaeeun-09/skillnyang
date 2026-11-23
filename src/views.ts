@@ -154,3 +154,31 @@ export function chunkMessage(text: string, max = 1900): string[] {
   if (cur) out.push(cur);
   return out;
 }
+
+/** 자동 추천 메시지 아래에 붙는 "자세히 / 설치 명령" 버튼 (최대 3개) */
+export function infoButtons(entries: Entry[]) {
+  const buttons = entries
+    .filter((e) => `info:${e.repo}`.length <= 100)
+    .slice(0, 3)
+    .map((e) =>
+      new ButtonBuilder().setCustomId(`info:${e.repo}`).setStyle(ButtonStyle.Secondary).setLabel(clip(`📦 ${e.repo}`, 80)),
+    );
+  return buttons.length ? [new ActionRowBuilder<ButtonBuilder>().addComponents(buttons)] : [];
+}
+
+export function surgeEmbed(
+  list: { entry: Entry; starDelta: number; installDelta: number }[],
+  summaryOf: (e: Entry) => string | null = () => null,
+): EmbedBuilder {
+  const lines = list.map(
+    (r) =>
+      `**[${r.entry.repo}](${r.entry.url})** ⭐ +${fmtNum(r.starDelta)}` +
+      (r.installDelta > 0 ? ` · 📥 +${fmtNum(r.installDelta)}` : "") +
+      ` (지금 ⭐ ${fmtNum(r.entry.stars)})\n${clip(summaryOf(r.entry) ?? r.entry.description ?? "", 140)}`,
+  );
+  return new EmbedBuilder()
+    .setTitle("🔥 급상승 스킬 발견!")
+    .setColor(0xff8a5c)
+    .setDescription(lines.join("\n\n"))
+    .setFooter({ text: "🐾 하루~이틀 사이 스타·설치가 크게 늘었어요 · 아래 버튼으로 설치 명령 받기" });
+}

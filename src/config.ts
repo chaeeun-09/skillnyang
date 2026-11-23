@@ -29,6 +29,17 @@ export const config = {
   digestDay: num("DIGEST_DAY", 1),
   digestHour: num("DIGEST_HOUR", 10),
   historyDays: num("HISTORY_DAYS", 30),
+  /** '오늘의 스킬' 기본 발송 시각(서울)과 개수 */
+  dailyHour: num("DAILY_HOUR", 10),
+  dailyCount: num("DAILY_COUNT", 2),
+  /** 급상승 알림 기준: 하루~이틀 사이 스타 증가량 / 설치 증가량 */
+  surgeMinStars: num("SURGE_MIN_STARS", 200),
+  surgeMinInstalls: num("SURGE_MIN_INSTALLS", 1000),
+  /** 대화 감지 추천(관찰 채널)을 쓰려면 true + 개발자 포털에서 Message Content Intent 를 켜야 함 */
+  enableMessageContent: process.env.ENABLE_MESSAGE_CONTENT === "true",
+  /** 같은 채널에서 자동 제안 사이 최소 간격(분) / 같은 사람에게 최소 간격(분) */
+  suggestChannelCooldownMin: num("SUGGEST_CHANNEL_COOLDOWN_MIN", 20),
+  suggestUserCooldownMin: num("SUGGEST_USER_COOLDOWN_MIN", 60),
   dataDir: process.env.DATA_DIR ?? "./data",
   refreshHours: num("REFRESH_HOURS", 6),
   /** 크롤링할 최대 레포 수 (스타 순 상위) */
