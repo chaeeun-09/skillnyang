@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { getRaw, getRepo, getTree, pool, searchRepos, type RepoMeta } from "./github.js";
 import { isSafeName, isSafePath, isSafeRepo } from "./install.js";
 import { categorize, score } from "./ranking.js";
+import { hitKey, leaderboard, searchSkillsSh, type SkillsShHit } from "./skillssh.js";
 import type { Entry, Index, Item } from "./types.js";
 
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + "…" : s);
@@ -95,7 +96,30 @@ async function itemsFor(meta: RepoMeta): Promise<{ marketplaceName: string | nul
   return { marketplaceName: null, items: items.filter((x): x is Item => !!x) };
 }
 
-export async function crawl(log: (s: string) => void = console.log): Promise<Index> {
+/** skills.sh 에서 이 레포의 스킬 설치 수를 모은다 (id → hit) */
+export async function installsFor(repo: string, items: Item[], board: Map<string, SkillsShHit[]>): Promise<Map<string, SkillsShHit>> {
+  const [owner, name] = repo.split("/");
+  const hits = new Map<string, SkillsShHit>();
+  const add = (list: SkillsShHit[]) => {
+    for (const h of list) if (h.source.toLowerCase() === repo.toLowerCase()) hits.set(h.id ?? hitKey(h.source, h.name), h);
+  };
+  add(board.get(repo.toLowerCase()) ?? []);
+  const queries = [name, ...items.map((i) => i.name)].filter((q, i, a) => a.indexOf(q) === i);
+  for (const q of queries.slice(0, config.skillsShQueriesPerRepo)) add(await searchSkillsSh(q, owner));
+  return hits;
+}
+
+export function matchInstalls(item: Item, hits: Map<string, SkillsShHit>): number | undefined {
+  const n = item.name.toLowerCase();
+  for (const h of hits.values()) {
+    if (h.name.toLowerCase() === n || (h.id ?? "").toLowerCase().endsWith(`/${n}`)) return h.installs;
+  }
+  return undefined;
+}
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+export async function crawl(prev?: Index, log: (s: string) => void = console.log): Promise<Index> {
   const t0 = Date.now();
   const metas = new Map<string, RepoMeta>();
 
@@ -106,16 +130,27 @@ export async function crawl(log: (s: string) => void = console.log): Promise<Ind
       log(`[crawl] search failed "${q}": ${(e as Error).message}`);
     }
   }
-  log(`[crawl] search → ${metas.size} repos`);
+  log(`[crawl] github search → ${metas.size} repos`);
+
+  // (선택) skills.sh 리더보드 — 토큰이 있으면 설치 수 기준 상위 레포도 후보로 편입
+  const board = new Map<string, SkillsShHit[]>();
+  for (const h of await leaderboard("all-time")) {
+    if (h.source && isSafeRepo(h.source)) {
+      const k = h.source.toLowerCase();
+      board.set(k, [...(board.get(k) ?? []), h]);
+    }
+  }
+  if (board.size) log(`[crawl] skills.sh leaderboard → ${board.size} repos`);
 
   const curated = await curatedMap();
   log(`[crawl] curated lists → ${curated.size} linked repos`);
 
-  // 시드 + 큐레이션 링크 중 아직 메타가 없는 것 보충
+  // 시드 + 리더보드 + 큐레이션 링크 중 아직 메타가 없는 것 보충
   // awesome 리스트는 링크가 수천 개일 수 있어서, 여러 리스트에 겹친 레포부터 MAX_CURATED_FETCH 개까지만
   const curatedByOverlap = [...curated.entries()].sort((a, b) => b[1].length - a[1].length).map(([r]) => r);
   const extra = [
     ...config.seedRepos.map((s) => s.toLowerCase()),
+    ...[...board.keys()].slice(0, config.maxCuratedFetch),
     ...curatedByOverlap.filter((r) => !metas.has(r)).slice(0, config.maxCuratedFetch),
   ].filter((r, i, arr) => !metas.has(r) && arr.indexOf(r) === i);
   const fetched = await pool(extra, 8, (r) => getRepo(r).catch(() => null));
@@ -134,12 +169,21 @@ export async function crawl(log: (s: string) => void = console.log): Promise<Ind
     .slice(0, config.maxRepos);
   log(`[crawl] inspecting ${candidates.length} candidates`);
 
+  const prevSeen = new Map((prev?.entries ?? []).map((e) => [e.repo.toLowerCase(), e.firstSeen]));
+  const now = new Date().toISOString();
+
   const entries = (
     await pool(candidates, 6, async (m): Promise<Entry | null> => {
       try {
         const { marketplaceName, items } = await itemsFor(m);
         if (!items.length) return null; // awesome 리스트 등 설치할 게 없는 레포
         const key = m.full_name.toLowerCase();
+        const hits = await installsFor(m.full_name, items, board);
+        for (const it of items) {
+          const n = matchInstalls(it, hits);
+          if (n !== undefined) it.installs = n;
+        }
+        const installs = [...hits.values()].reduce((s, h) => s + h.installs, 0);
         const official = config.officialOwners.includes(m.full_name.split("/")[0].toLowerCase());
         const curatedBy = curated.get(key) ?? [];
         const description = clip(m.description ?? "", 300);
@@ -153,16 +197,21 @@ export async function crawl(log: (s: string) => void = console.log): Promise<Ind
           topics: m.topics ?? [],
           license: m.license?.spdx_id ?? null,
           marketplaceName,
-          items,
+          // 설치 수 많은 아이템이 먼저 보이도록
+          items: items.sort((a, b) => (b.installs ?? -1) - (a.installs ?? -1)),
+          installs,
           official,
           curatedBy,
           categories: categorize(text, m.topics ?? []),
           score: score({
             stars: m.stargazers_count,
+            installs,
             official,
             curatedCount: curatedBy.length,
             hasMarketplace: !!marketplaceName,
           }),
+          // 첫 크롤링에서는 전부 "신규"가 되지 않도록 epoch 로 둔다
+          firstSeen: prevSeen.get(key) ?? (prev?.entries.length ? now : new Date(0).toISOString()),
         };
       } catch (e) {
         log(`[crawl] skip ${m.full_name}: ${(e as Error).message}`);
@@ -173,6 +222,13 @@ export async function crawl(log: (s: string) => void = console.log): Promise<Ind
     .filter((e): e is Entry => !!e)
     .sort((a, b) => b.score - a.score);
 
-  log(`[crawl] done: ${entries.length} entries in ${Math.round((Date.now() - t0) / 1000)}s`);
-  return { updatedAt: new Date().toISOString(), entries };
+  // 일별 스냅샷 (급상승 계산용)
+  const history = { ...(prev?.history ?? {}) };
+  history[today()] = Object.fromEntries(entries.map((e) => [e.repo.toLowerCase(), [e.stars, e.installs]]));
+  const cutoff = new Date(Date.now() - config.historyDays * 86_400_000).toISOString().slice(0, 10);
+  for (const d of Object.keys(history)) if (d < cutoff) delete history[d];
+
+  const withInstalls = entries.filter((e) => e.installs > 0).length;
+  log(`[crawl] done: ${entries.length} entries (${withInstalls} with skills.sh installs) in ${Math.round((Date.now() - t0) / 1000)}s`);
+  return { updatedAt: now, entries, history };
 }

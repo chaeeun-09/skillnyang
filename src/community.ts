@@ -1,0 +1,127 @@
+/**
+ * 서버(길드)별 커뮤니티 신호: 👍 투표, 설치 명령 조회 수, 다이제스트 채널 설정.
+ * data/community.json 하나에 저장 (서버 몇 개 규모면 충분).
+ */
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { config } from "./config.js";
+import { communityBonus } from "./ranking.js";
+import type { Entry } from "./types.js";
+
+export interface GuildData {
+  /** repo(lowercase) → 투표한 userId 목록 */
+  votes: Record<string, string[]>;
+  /** repo(lowercase) → 설치 명령 조회 이벤트 시각(ms) 목록. 최근 90일만 유지 */
+  clicks: Record<string, number[]>;
+  digestChannelId?: string;
+  lastDigestAt?: string;
+}
+
+interface CommunityFile {
+  guilds: Record<string, GuildData>;
+}
+
+const file = () => join(config.dataDir, "community.json");
+let data: CommunityFile = { guilds: {} };
+let saveTimer: NodeJS.Timeout | null = null;
+
+const CLICK_TTL = 90 * 86_400_000;
+
+export async function loadCommunity() {
+  try {
+    data = JSON.parse(await readFile(file(), "utf8")) as CommunityFile;
+    data.guilds ??= {};
+  } catch {
+    // 첫 실행
+  }
+}
+
+async function flush() {
+  await mkdir(config.dataDir, { recursive: true });
+  const tmp = file() + ".tmp";
+  await writeFile(tmp, JSON.stringify(data));
+  await rename(tmp, file());
+}
+
+/** 잦은 쓰기를 묶어서 저장 */
+function scheduleSave() {
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    flush().catch((e) => console.error("[community] save failed", e));
+  }, 2000);
+  saveTimer.unref();
+}
+
+export async function flushCommunity() {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  await flush();
+}
+
+export function guild(id: string): GuildData {
+  return (data.guilds[id] ??= { votes: {}, clicks: {} });
+}
+
+export function allGuilds(): [string, GuildData][] {
+  return Object.entries(data.guilds);
+}
+
+/** 투표 토글. 반환: 투표 후 상태(true=투표함)와 현재 표 수 */
+export function toggleVote(guildId: string, repo: string, userId: string): { voted: boolean; count: number } {
+  const g = guild(guildId);
+  const k = repo.toLowerCase();
+  const list = (g.votes[k] ??= []);
+  const i = list.indexOf(userId);
+  if (i >= 0) list.splice(i, 1);
+  else list.push(userId);
+  if (!list.length) delete g.votes[k];
+  scheduleSave();
+  return { voted: i < 0, count: g.votes[k]?.length ?? 0 };
+}
+
+export function recordClick(guildId: string, repo: string, now = Date.now()) {
+  const g = guild(guildId);
+  const k = repo.toLowerCase();
+  g.clicks[k] = [...(g.clicks[k] ?? []).filter((t) => now - t < CLICK_TTL), now];
+  scheduleSave();
+}
+
+export function signals(guildId: string | null, repo: string, sinceMs = 0): { votes: number; clicks: number } {
+  if (!guildId) return { votes: 0, clicks: 0 };
+  const g = data.guilds[guildId];
+  if (!g) return { votes: 0, clicks: 0 };
+  const k = repo.toLowerCase();
+  const now = Date.now();
+  return {
+    votes: g.votes[k]?.length ?? 0,
+    clicks: (g.clicks[k] ?? []).filter((t) => now - t < CLICK_TTL && t >= sinceMs).length,
+  };
+}
+
+export function setDigest(guildId: string, channelId: string | undefined) {
+  const g = guild(guildId);
+  if (channelId) g.digestChannelId = channelId;
+  else delete g.digestChannelId;
+  scheduleSave();
+}
+
+export function markDigestSent(guildId: string, at = new Date()) {
+  guild(guildId).lastDigestAt = at.toISOString();
+  scheduleSave();
+}
+
+/** 테스트용 */
+export function _reset() {
+  data = { guilds: {} };
+}
+
+/** 전역 점수 + 이 서버의 커뮤니티 가산점으로 정렬 */
+export function rankForGuild(entries: Entry[], guildId: string | null): Entry[] {
+  if (!guildId || !data.guilds[guildId]) return entries;
+  const total = (e: Entry) => {
+    const s = signals(guildId, e.repo);
+    return e.score + communityBonus(s.votes, s.clicks);
+  };
+  return [...entries].sort((a, b) => total(b) - total(a));
+}

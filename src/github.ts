@@ -21,7 +21,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function request(url: string, accept = "application/vnd.github+json"): Promise<Response> {
   const headers: Record<string, string> = {
     Accept: accept,
-    "User-Agent": "skill-scout-bot",
+    "User-Agent": "skillnyang-bot",
     "X-GitHub-Api-Version": "2022-11-28",
   };
   if (config.githubToken) headers.Authorization = `Bearer ${config.githubToken}`;
@@ -80,7 +80,7 @@ export async function getTree(fullName: string, branch: string): Promise<string[
 /** raw.githubusercontent 는 API rate limit 에 포함되지 않음 */
 export async function getRaw(fullName: string, branch: string, path: string): Promise<string | null> {
   const res = await fetch(`${RAW}/${fullName}/${encodeURIComponent(branch)}/${path.split("/").map(encodeURIComponent).join("/")}`, {
-    headers: { "User-Agent": "skill-scout-bot" },
+    headers: { "User-Agent": "skillnyang-bot" },
   });
   if (!res.ok) return null;
   const text = await res.text();

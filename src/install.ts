@@ -61,7 +61,7 @@ export function installFor(entry: Entry, item: Item): InstallInstructions | null
     `rm -rf "$tmp/.git" && mkdir -p ~/.claude/skills && cp -R ${src} ~/.claude/skills/${dirName} && rm -rf "$tmp"`;
   return {
     inSession: [],
-    shell: [`npx skills add ${entry.repo} --skill ${item.name}`, manual],
+    shell: [`npx skills add ${entry.repo} --skill ${item.name} --agent claude-code -g`, manual],
     note: "위 두 줄 중 하나만 실행하면 됩니다 (npx skills CLI 또는 git 수동 설치). 설치 후 Claude Code 재시작.",
   };
 }

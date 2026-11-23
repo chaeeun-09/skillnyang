@@ -17,6 +17,18 @@ export const config = {
   /** 지정하면 해당 길드에만 커맨드 등록(즉시 반영). 비우면 글로벌 등록. */
   discordGuildId: process.env.DISCORD_GUILD_ID ?? "",
   githubToken: process.env.GITHUB_TOKEN ?? "",
+  skillsShBaseUrl: process.env.SKILLS_SH_URL ?? "https://skills.sh",
+  /** 선택: skills.sh v1 API 용 Vercel OIDC 토큰. 없으면 공개 검색 엔드포인트만 사용 */
+  skillsShToken: process.env.SKILLS_SH_TOKEN ?? "",
+  /** 레포당 skills.sh 검색 호출 상한 */
+  skillsShQueriesPerRepo: num("SKILLS_SH_QUERIES_PER_REPO", 8),
+  /** 선택: 한국어 요약용 Claude API */
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? "claude-haiku-4-5",
+  /** 다이제스트 발송 요일(0=일)·시각, Asia/Seoul 기준 */
+  digestDay: num("DIGEST_DAY", 1),
+  digestHour: num("DIGEST_HOUR", 10),
+  historyDays: num("HISTORY_DAYS", 30),
   dataDir: process.env.DATA_DIR ?? "./data",
   refreshHours: num("REFRESH_HOURS", 6),
   /** 크롤링할 최대 레포 수 (스타 순 상위) */

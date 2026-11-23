@@ -1,5 +1,5 @@
 {
-  "name": "skill-scout",
+  "name": "skillnyang",
   "version": "0.1.0",
   "description": "Discord bot that ranks Claude Code skills/plugins by GitHub stars + official/curated sources and hands out copy-paste install commands",
   "type": "module",

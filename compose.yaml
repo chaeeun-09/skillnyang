@@ -1,7 +1,7 @@
 services:
   bot:
     build: .
-    image: skill-scout:latest
+    image: skillnyang:latest
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -17,7 +17,7 @@ services:
 
   # 슬래시 커맨드 등록 (최초 1회 / 커맨드 변경 시): docker compose run --rm deploy-commands
   deploy-commands:
-    image: skill-scout:latest
+    image: skillnyang:latest
     env_file: .env
     command: ["node", "dist/src/deploy-commands.js"]
     profiles: ["tools"]

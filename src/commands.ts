@@ -1,13 +1,13 @@
-import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { CATEGORIES } from "./ranking.js";
 
 export const skillsCommand = new SlashCommandBuilder()
   .setName("skills")
-  .setDescription("Claude Code 스킬/플러그인 추천 & 설치 명령")
+  .setDescription("🐱 스킬냥 — Claude Code 스킬 추천 & 설치 명령")
   .addSubcommand((s) =>
     s
       .setName("top")
-      .setDescription("스타 + 공식/큐레이션 점수로 정렬한 인기 스킬")
+      .setDescription("스타·실제 설치 수·공식/큐레이션·우리 서버 투표로 정렬한 인기 스킬")
       .addStringOption((o) =>
         o
           .setName("category")
@@ -31,15 +31,35 @@ export const skillsCommand = new SlashCommandBuilder()
   .addSubcommand((s) =>
     s
       .setName("info")
-      .setDescription("레포 상세 + 설치 명령")
+      .setDescription("레포 상세 + 한국어 요약 + 설치 명령")
       .addStringOption((o) =>
         o.setName("repo").setDescription("owner/repo").setRequired(true).setAutocomplete(true),
       ),
   )
+  .addSubcommand((s) => s.setName("server").setDescription("💗 우리 서버에서 👍·설치 조회가 많은 스킬"))
+  .addSubcommand((s) => s.setName("rising").setDescription("📈 최근 7일 스타·설치 급상승"))
+  .addSubcommandGroup((g) =>
+    g
+      .setName("digest")
+      .setDescription("(관리자) 주간 다이제스트 설정")
+      .addSubcommand((s) =>
+        s
+          .setName("set")
+          .setDescription("다이제스트를 보낼 채널 지정")
+          .addChannelOption((o) =>
+            o
+              .setName("channel")
+              .setDescription("텍스트 채널")
+              .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((s) => s.setName("off").setDescription("다이제스트 끄기"))
+      .addSubcommand((s) => s.setName("now").setDescription("지금 바로 미리보기 (나에게만 보임)")),
+  )
   .addSubcommand((s) => s.setName("refresh").setDescription("(관리자) 인덱스 즉시 갱신"))
-  .setDefaultMemberPermissions(null)
   .setDMPermission(true);
 
-export const REFRESH_PERMISSION = PermissionFlagsBits.ManageGuild;
+export const ADMIN_PERMISSION = PermissionFlagsBits.ManageGuild;
 
 export const commands = [skillsCommand.toJSON()];

@@ -15,4 +15,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: docker build -t skill-scout:ci .
+      - run: docker build -t skillnyang:ci .

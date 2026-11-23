@@ -2,6 +2,7 @@ import type { Entry } from "./types.js";
 
 export interface ScoreInput {
   stars: number;
+  installs: number;
   official: boolean;
   curatedCount: number;
   hasMarketplace: boolean;
@@ -9,30 +10,49 @@ export interface ScoreInput {
 
 /** 가중치 — 필요하면 여기만 고치면 됨 */
 export const WEIGHTS = {
-  /** log10(stars+1) 당 점수. 1k★≈60, 10k★≈80, 100k★≈100 */
-  stars: 20,
-  official: 25,
-  perCuratedList: 5,
+  /** log10(stars+1) 당 점수. 1k★≈45, 10k★≈60, 100k★≈75 */
+  stars: 15,
+  /** log10(installs+1) 당 점수 (skills.sh 실제 설치 수). 1k≈45, 100k≈75 */
+  installs: 15,
+  official: 20,
+  perCuratedList: 4,
   maxCuratedLists: 3,
   /** /plugin 으로 한 번에 설치 가능하면 소폭 가산 */
   marketplace: 3,
+  /** 서버 내 👍 : log2(votes+1) × 8  (1표 8, 3표 16, 7표 24) */
+  vote: 8,
+  /** 서버 내 설치 명령 조회 : log2(clicks+1) × 3 */
+  click: 3,
 };
 
+const r1 = (n: number) => Math.round(n * 10) / 10;
+const starPts = (s: number) => Math.log10(Math.max(0, s) + 1) * WEIGHTS.stars;
+const installPts = (n: number) => Math.log10(Math.max(0, n) + 1) * WEIGHTS.installs;
+
 export function score(i: ScoreInput): number {
-  const s =
-    Math.log10(Math.max(0, i.stars) + 1) * WEIGHTS.stars +
-    (i.official ? WEIGHTS.official : 0) +
-    Math.min(i.curatedCount, WEIGHTS.maxCuratedLists) * WEIGHTS.perCuratedList +
-    (i.hasMarketplace ? WEIGHTS.marketplace : 0);
-  return Math.round(s * 10) / 10;
+  return r1(
+    starPts(i.stars) +
+      installPts(i.installs) +
+      (i.official ? WEIGHTS.official : 0) +
+      Math.min(i.curatedCount, WEIGHTS.maxCuratedLists) * WEIGHTS.perCuratedList +
+      (i.hasMarketplace ? WEIGHTS.marketplace : 0),
+  );
 }
 
-export function scoreBreakdown(e: Entry): string {
-  const parts = [`★ ${Math.round(Math.log10(e.stars + 1) * WEIGHTS.stars)}`];
+/** 서버(길드)별 커뮤니티 가산점 */
+export function communityBonus(votes: number, clicks: number): number {
+  return r1(Math.log2(votes + 1) * WEIGHTS.vote + Math.log2(clicks + 1) * WEIGHTS.click);
+}
+
+export function scoreBreakdown(e: Entry, votes = 0, clicks = 0): string {
+  const parts = [`★ ${Math.round(starPts(e.stars))}`];
+  if (e.installs) parts.push(`설치 ${Math.round(installPts(e.installs))}`);
   if (e.official) parts.push(`공식 +${WEIGHTS.official}`);
   const c = Math.min(e.curatedBy.length, WEIGHTS.maxCuratedLists);
   if (c) parts.push(`큐레이션 +${c * WEIGHTS.perCuratedList}`);
-  if (e.marketplaceName) parts.push(`마켓플레이스 +${WEIGHTS.marketplace}`);
+  if (e.marketplaceName) parts.push(`마켓 +${WEIGHTS.marketplace}`);
+  const cb = communityBonus(votes, clicks);
+  if (cb) parts.push(`우리 서버 +${cb}`);
   return parts.join(" · ");
 }
 

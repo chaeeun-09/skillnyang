@@ -5,7 +5,7 @@ import type { Index } from "./types.js";
 
 const file = () => join(config.dataDir, "index.json");
 
-let current: Index = { updatedAt: new Date(0).toISOString(), entries: [] };
+let current: Index = { updatedAt: new Date(0).toISOString(), entries: [], history: {} };
 
 export function getIndex(): Index {
   return current;
@@ -13,7 +13,17 @@ export function getIndex(): Index {
 
 export async function loadIndex(): Promise<Index> {
   try {
-    current = JSON.parse(await readFile(file(), "utf8")) as Index;
+    const raw = JSON.parse(await readFile(file(), "utf8")) as Partial<Index>;
+    // 이전 버전 인덱스 호환
+    current = {
+      updatedAt: raw.updatedAt ?? new Date(0).toISOString(),
+      history: raw.history ?? {},
+      entries: (raw.entries ?? []).map((e) => ({
+        ...e,
+        installs: e.installs ?? 0,
+        firstSeen: e.firstSeen ?? new Date(0).toISOString(),
+      })),
+    };
   } catch {
     // 첫 실행
   }
