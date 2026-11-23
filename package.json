@@ -1,0 +1,26 @@
+{
+  "name": "skill-scout",
+  "version": "0.1.0",
+  "description": "Discord bot that ranks Claude Code skills/plugins by GitHub stars + official/curated sources and hands out copy-paste install commands",
+  "type": "module",
+  "main": "dist/src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/src/index.js",
+    "dev": "tsc -p tsconfig.json && node dist/src/index.js",
+    "deploy-commands": "node dist/src/deploy-commands.js",
+    "crawl": "node dist/src/crawl-once.js",
+    "test": "tsc -p tsconfig.json && node --test \"dist/test/*.test.js\""
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  },
+  "license": "MIT"
+}

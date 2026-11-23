@@ -1,0 +1,26 @@
+services:
+  bot:
+    build: .
+    image: skill-scout:latest
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - skill-data:/data
+    healthcheck:
+      # 인덱스 파일이 생겼는지로 간단 체크
+      test: ["CMD", "node", "-e", "require('fs').accessSync('/data/index.json')"]
+      interval: 5m
+      start_period: 15m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # 슬래시 커맨드 등록 (최초 1회 / 커맨드 변경 시): docker compose run --rm deploy-commands
+  deploy-commands:
+    image: skill-scout:latest
+    env_file: .env
+    command: ["node", "dist/src/deploy-commands.js"]
+    profiles: ["tools"]
+
+volumes:
+  skill-data:
