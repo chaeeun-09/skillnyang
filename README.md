@@ -1,4 +1,4 @@
-# 스킬냥 🐱 (skillnyang)
+# 스킬냥이 🐱 (skillnyang)
 
 우리 디스코드 서버 전용 **Claude Code 스킬 추천 봇**.
 GitHub 스타 + **skills.sh 실제 설치 수** + 공식·큐레이션 출처 + **우리 서버 👍 투표**로 랭킹하고,

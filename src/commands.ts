@@ -3,7 +3,7 @@ import { CATEGORIES } from "./ranking.js";
 
 export const skillsCommand = new SlashCommandBuilder()
   .setName("skills")
-  .setDescription("🐱 스킬냥 — Claude Code 스킬 추천 & 설치 명령")
+  .setDescription("🐱 스킬냥이 — Claude Code 스킬 추천 & 설치 명령")
   .addSubcommand((s) =>
     s
       .setName("top")

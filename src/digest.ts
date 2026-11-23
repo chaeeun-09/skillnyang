@@ -65,10 +65,10 @@ export async function buildDigest(idx: Index, guildId: string, sinceMs: number):
   );
 
   const embed = new EmbedBuilder()
-    .setTitle("🐱 스킬냥 주간 다이제스트")
+    .setTitle("🐱 스킬냥이 주간 다이제스트")
     .setColor(0xf6a5c0)
     .setDescription("이번 주 Claude Code 스킬 소식이다냥! `/skills info` 로 바로 설치 명령을 받을 수 있어요.")
-    .setFooter({ text: "🐾 스킬냥 · 매주 자동 발송" })
+    .setFooter({ text: "🐾 스킬냥이 · 매주 자동 발송" })
     .setTimestamp(new Date());
 
   embed.addFields({ name: "🆕 새로 등장", value: freshLines.join("\n").slice(0, 1024) || "이번 주엔 없어요." });
